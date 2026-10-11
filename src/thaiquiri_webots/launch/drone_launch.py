@@ -53,6 +53,7 @@ def generate_launch_description():
             os.path.join(rtabmap_launch_path, 'launch', 'rtabmap.launch.py')
         ),
         launch_arguments={
+            'use_sim_time': 'true',
             'rtabmap_args': '--delete_db_on_start',
 
             'stereo': 'true',
@@ -111,6 +112,32 @@ def generate_launch_description():
         namespace='drone',
     )
 
+    odom_to_ardupilot_node = Node(
+        package='thaiquiri_webots',
+        executable='odom_to_ardupilot',
+        name='odom_to_ardupilot_node',
+        output='screen',
+        namespace='drone',
+        parameters=[
+            {'odom_topic': '/drone/odom'},
+            {'tf_topic': '/ap/tf'},
+            {'parent_frame': 'odom'},
+            {'child_frame': 'base_footprint'},
+            {'use_sim_time': True},
+        ]
+    )
+
+    gps_pose_publisher_node = Node(
+        package='thaiquiri_webots',
+        executable='gps_pose_publisher',
+        name='gps_pose_publisher_node',
+        output='screen',
+        namespace='drone',
+        parameters=[
+            {'use_sim_time': True},
+        ]
+    )
+
     stereo_proc_share = get_package_share_directory('stereo_image_proc')
     stereo_proc = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(os.path.join(
@@ -135,6 +162,8 @@ def generate_launch_description():
         robot_state_publisher,
         fix_camera_info,
         bgra_to_bgr_node,
+        odom_to_ardupilot_node,
+        gps_pose_publisher_node,
         stereo_proc,
         # joint_state_publisher,
         waiting_nodes,

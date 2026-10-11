@@ -6,40 +6,49 @@ import numpy as np
 from controller import Supervisor
 from time import sleep
 from tf2_ros import TransformBroadcaster, TransformStamped
+from thaiquiri_webots.webots_vehicle import WebotsArduVehicle
 
 
 class DroneDriver:
     def init(self, webots_node, properties):
         self.__robot = webots_node.robot
+        self.motors = ['motor_propeller_front_left', 'motor_propeller_front_right',
+                       'motor_propeller_rear_left', 'motor_propeller_rear_right']
 
         # Devices
         self.__timestep = int(self.__robot.getBasicTimeStep())
         self.__devices = {
+
             'altimeter': self.__robot.getDevice('altimeter_cube'),
         }
+        self.__devices['altimeter'].enable(self.__timestep)
 
-        # 1. Inicializar los 4 motores
-        self.__motors = {
-            'front_left':  self.__robot.getDevice('motor_propeller_front_left'),
-            # *-1
-            'front_right': self.__robot.getDevice('motor_propeller_front_right'),
-            'rear_left':   self.__robot.getDevice('motor_propeller_rear_left'),
-            # *-1
-            'rear_right':  self.__robot.getDevice('motor_propeller_rear_right')
-        }
+        # # 1. Inicializar los 4 motores
+        # self.__motors = {
+        #     'front_left':  self.__robot.getDevice('motor_propeller_front_left'),
+        #     # *-1
+        #     'front_right': self.__robot.getDevice('motor_propeller_front_right'),
+        #     'rear_left':   self.__robot.getDevice('motor_propeller_rear_left'),
+        #     # *-1
+        #     'rear_right':  self.__robot.getDevice('motor_propeller_rear_right')
+        # }
 
         # Configurar motores para control por velocidad
-        for motor in self.__motors.values():
-            motor.setPosition(float('inf'))
-            motor.setVelocity(1.0)
+        # for motor in self.__motors.values():
+        #     motor.setPosition(float('inf'))
+        #     motor.setVelocity(1.0)
 
-        sleep(1)  # Esperar un momento para que los motores se estabilicen
-
-        # 2. Sensores (activar los que se necesiten)
-        self.__devices['altimeter'].enable(self.__timestep)
-        # self.__devices['camera_left'].enable(self.__timestep)
-        # self.__devices['camera_right'].enable(self.__timestep)
-        # self.__devices['lidar'].enable(self.__timestep)
+        self.vehicle = WebotsArduVehicle(motor_names=self.motors,
+                                         reversed_motors=None,
+                                         accel_name='accelerometer_cube',
+                                         imu_name=None,
+                                         gyro_name='gyro_cube',
+                                         gps_name=None,
+                                         instance=0,
+                                         bidirectional_motors=False,
+                                         uses_propellers=True,
+                                         sitl_address='172.18.0.3',
+                                         robot=self.__robot)
 
         self.altimeter_msg = FloatStamped()
 
