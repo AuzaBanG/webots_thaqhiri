@@ -1,24 +1,20 @@
 services:
-  ardupilot_sitl:
-    build:
-      context: ./ardupilot_dev_docker
-      dockerfile: Dockerfile_dev-ros
-    image: ardupilot_sitl
-    container_name: ardupilot_sitl_dev_env
-    working_dir: /home/ubuntu/ros_ws
-    command: tail -F anything
-    environment:
-      - ROS_LOCALHOST_ONLY=0
-      - ROS_DOMAIN_ID=0
-    # ports:
-    #   - "14550:14550/udp" # MAVLink UDP port
-    #   - "5760:5760/tcp" # MAVLink TCP port
-    # network_mode: "host"
-    networks:
-      - drone_net
-    volumes:
-      - /tmp/.X11-unix:/tmp/.X11-unix
-      - ../ardu_ws:/home/ubuntu/ros_ws
+  # ardupilot_sitl:
+  #   build:
+  #     context: ./ardupilot_dev_docker
+  #     dockerfile: Dockerfile_dev-ros
+  #   image: ardupilot_sitl
+  #   container_name: ardupilot_sitl_dev_env
+  #   working_dir: /home/ubuntu/ros_ws
+  #   command: tail -F anything
+  #   environment:
+  #     - ROS_LOCALHOST_ONLY=0
+  #     - ROS_DOMAIN_ID=0
+  #   networks:
+  #     - drone_net
+  #   volumes:
+  #     - /tmp/.X11-unix:/tmp/.X11-unix
+  #     - ../ardu_ws:/home/ubuntu/ros_ws
   padoru_webots_jazzy:
     build:
       context: .

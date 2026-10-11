@@ -64,7 +64,8 @@ setup(
             'fix_camera_info = thaiquiri_webots.fix_camera_info:main',
             'odom_to_ardupilot = thaiquiri_webots.odom_to_ardupilot:main',
             'gps_pose_publisher = thaiquiri_webots.gps_pose_publisher:main',
-            # 'teleop_drone = thaiquiri_webots.teleop_drone:main',
+            'imu_merger_node = thaiquiri_webots.imu_merger_node:main',
+            'teleop_drone = thaiquiri_webots.teleop_drone:main',
         ],
     },
 )

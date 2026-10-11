@@ -156,8 +156,8 @@ PROTO thaiquiri [
           rotation 0.5773509358560258 -0.577349935856137 0.577349935856137 2.09439
           name "camera_left"
           fieldOfView 1.91986
-          width 1280
-          height 720
+          width 640
+          height 480
           near 0.1
           far 20
         }
@@ -166,8 +166,8 @@ PROTO thaiquiri [
           rotation 0.5773509358560258 -0.577349935856137 0.577349935856137 2.09439
           name "camera_right"
           fieldOfView 1.91986
-          width 1280
-          height 720
+          width 640
+          height 480
           near 0.1
           far 20
         }

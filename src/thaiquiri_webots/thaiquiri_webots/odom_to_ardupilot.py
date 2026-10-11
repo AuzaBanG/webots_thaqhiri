@@ -1,3 +1,5 @@
+import math
+
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
@@ -91,11 +93,13 @@ class OdomToArdupilotTF(Node):
 
         # 2. Tu rotación estática del URDF (rpy="1.5708 0 1.5708")
         # Convertido a cuaternión [x, y, z, w], esto equivale exactamente a:
-        rot_urdf = R.from_quat([0.5, 0.5, 0.5, 0.5])
-
-        # 3. Multiplicar las rotaciones (R_odom_a_footprint * R_footprint_a_link)
+        rot_urdf = R.from_euler('XYZ', [1.5708, 0, 1.5708], degrees=False)
         rot_orig = R.from_quat(q_orig)
-        rot_final = rot_orig * rot_urdf
+        rot_aligned = rot_orig * rot_urdf.inv()
+
+        # 3. PRE-VOLTEAR 180 grados para compensar la pasarela DDS de ArduPilot
+        rot_flip = R.from_euler('XYZ', [math.pi, 0, 0], degrees=False)
+        rot_final = rot_aligned * rot_flip
         q_final = rot_final.as_quat()  # Devuelve el nuevo [x, y, z, w]
 
         # 4. Construir el mensaje TF

@@ -53,7 +53,7 @@ def generate_launch_description():
             os.path.join(rtabmap_launch_path, 'launch', 'rtabmap.launch.py')
         ),
         launch_arguments={
-            'use_sim_time': 'true',
+            # 'use_sim_time': 'true',
             'rtabmap_args': '--delete_db_on_start',
 
             'stereo': 'true',
@@ -124,7 +124,10 @@ def generate_launch_description():
             {'parent_frame': 'odom'},
             {'child_frame': 'base_footprint'},
             {'use_sim_time': True},
-        ]
+        ],
+        remappings=[
+            ('/clock', '/ap/clock')
+        ],
     )
 
     gps_pose_publisher_node = Node(
@@ -135,6 +138,35 @@ def generate_launch_description():
         namespace='drone',
         parameters=[
             {'use_sim_time': True},
+        ],
+        remappings=[
+            ('/clock', '/ap/clock')
+        ],
+    )
+
+    imu_merger_node = Node(
+        package='thaiquiri_webots',
+        executable='imu_merger_node',
+        name='imu_merger_node',
+        output='screen',
+        namespace='drone',
+    )
+
+    imu_filter_node = Node(
+        package='imu_filter_madgwick',
+        executable='imu_filter_madgwick_node',
+        name='imu_filter_madgwick',
+        output='screen',
+        parameters=[
+                {'use_mag': False},  # Webots no suele tener magnetómetro por defecto
+                # Si quieres que publique el frame transform
+                {'publish_tf': False},
+                {'world_frame': 'enu'}  # East-North-Up, el estándar de ROS
+        ],
+        remappings=[
+            # Se suscribe al tópico que genera nuestro merger
+            ('/imu/data_raw', '/imu/data_raw'),
+            ('/imu/data', '/imu/data'),
         ]
     )
 
@@ -162,10 +194,12 @@ def generate_launch_description():
         robot_state_publisher,
         fix_camera_info,
         bgra_to_bgr_node,
-        odom_to_ardupilot_node,
-        gps_pose_publisher_node,
+        # odom_to_ardupilot_node,
+        # gps_pose_publisher_node,
         stereo_proc,
         # joint_state_publisher,
+        imu_merger_node,
+        imu_filter_node,
         waiting_nodes,
         launch.actions.RegisterEventHandler(
             event_handler=launch.event_handlers.OnProcessExit(
