@@ -5,3 +5,4 @@ needletail_aerial_unit-main/
 my_package/
 *.pdf
 *.gv
+.vscode/
