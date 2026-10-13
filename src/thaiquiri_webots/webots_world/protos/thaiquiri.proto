@@ -162,7 +162,7 @@ PROTO thaiquiri [
           far 20
         }
         DEF camera_right Camera {
-          translation 0.025 0.003 0.003
+          translation 0.025 0.003 0
           rotation 0.5773509358560258 -0.577349935856137 0.577349935856137 2.09439
           name "camera_right"
           fieldOfView 1.91986
@@ -268,7 +268,9 @@ PROTO thaiquiri [
       device DEF motor_propeller_rear_right RotationalMotor {
         name "motor_propeller_rear_right"
         maxVelocity 930
-        maxTorque 8
+        # Webots Propeller uses min(acceleration, maxTorque) for kinematic spin-up.
+        acceleration 2000
+        maxTorque 2000
       }
       fastHelix Solid {
         translation -0.2975 0.38 -0.295
@@ -325,7 +327,8 @@ PROTO thaiquiri [
       device DEF motor_propeller_rear_left RotationalMotor {
         name "motor_propeller_rear_left"
         maxVelocity 930
-        maxTorque 8
+        acceleration 2000
+        maxTorque 2000
       }
       fastHelix Solid {
         translation 0.2975 0.38 -0.295
@@ -382,7 +385,8 @@ PROTO thaiquiri [
       device DEF motor_propeller_front_right RotationalMotor {
         name "motor_propeller_front_right"
         maxVelocity 930
-        maxTorque 8
+        acceleration 2000
+        maxTorque 2000
       }
       fastHelix Solid {
         translation -0.2975 0.38 0.295
@@ -439,7 +443,8 @@ PROTO thaiquiri [
       device DEF motor_propeller_front_left RotationalMotor {
         name "motor_propeller_front_left"
         maxVelocity 930
-        maxTorque 8
+        acceleration 2000
+        maxTorque 2000
       }
       fastHelix Solid {
         translation 0.2975 0.38 0.295

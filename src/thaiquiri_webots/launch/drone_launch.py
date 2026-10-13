@@ -2,11 +2,11 @@ import os
 import launch
 from launch import LaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch.conditions import IfCondition
-from launch.actions import IncludeLaunchDescription, GroupAction
-from launch_ros.actions import Node, ComposableNodeContainer, SetRemap, SetParameter, PushRosNamespace
-from launch_ros.descriptions import ComposableNode
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, GroupAction
+from launch_ros.actions import Node, SetParameter
+from launch_ros.substitutions import FindPackageShare
 from ament_index_python.packages import get_package_share_directory
 from webots_ros2_driver.webots_launcher import WebotsLauncher
 from webots_ros2_driver.webots_controller import WebotsController
@@ -23,21 +23,12 @@ def generate_launch_description():
     with open(robot_description_path, 'r') as desc_file:
         robot_description = desc_file.read()
 
-    footprint = Node(
-        package='tf2_ros',
-        executable='static_transform_publisher',
-        name='footprint',
-        output='screen',
-        arguments=['0', '0', '0', '0', '0', '0', 'world', 'base_footprint']
-    )
-
     robot_state_publisher = Node(
         package='robot_state_publisher',
         executable='robot_state_publisher',
         name='robot_state_publisher',
         output='screen',
         parameters=[{'robot_description': robot_description}],
-        arguments=[robot_description_path]
     )
 
     # joint_state_publisher = Node(
@@ -47,13 +38,13 @@ def generate_launch_description():
     #     parameters=[{'robot_description': robot_description}]
     # )
 
-    rtabmap_launch_path = get_package_share_directory('rtabmap_launch')
     rtabmap = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
-            os.path.join(rtabmap_launch_path, 'launch', 'rtabmap.launch.py')
+            PathJoinSubstitution([FindPackageShare('rtabmap_launch'), 'launch', 'rtabmap.launch.py'])
         ),
         launch_arguments={
-            # 'use_sim_time': 'true',
+            'use_sim_time': 'true',
+            'namespace': 'drone',
             'rtabmap_args': '--delete_db_on_start',
 
             'stereo': 'true',
@@ -76,23 +67,25 @@ def generate_launch_description():
             'map_frame_id': 'map',
 
             'approx_sync': 'True',
-            'approx_sinc_max_interval': '0.05',
+            'approx_sync_max_interval': '0.05',
             'rviz': 'False',
 
             "queue_size": "20",
         }.items(),
-        condition=IfCondition(use_rtabmap)
     )
 
     webots = WebotsLauncher(
         world=os.path.join(package_dir, 'webots_world',
-                           'worlds', 'mine_thaiquiri.wbt')
+                            'worlds', 'mine_thaiquiri.wbt'),
+        ros2_supervisor=True,
+        gui=LaunchConfiguration('gui'),
     )
 
     drone_driver = WebotsController(
         robot_name='drone',
         parameters=[
             {'robot_description': robot_description_path},
+            {'use_sim_time': True},
         ]
     )
 
@@ -177,26 +170,28 @@ def generate_launch_description():
         launch_arguments={
             'namespace': 'drone',
             'approximate_sync': 'True',
-            'approximate_sync_tolerance_seconds': '0.05',
-            'disparity_only': 'True',
         }.items()
     )
 
     waiting_nodes = WaitForControllerConnection(
         target_driver=drone_driver,
-        nodes_to_start=[rtabmap]
+        nodes_to_start=[GroupAction(actions=[rtabmap], condition=IfCondition(use_rtabmap))]
     )
 
     return LaunchDescription([
+        DeclareLaunchArgument('rtabmap', default_value='true'),
+        DeclareLaunchArgument('gui', default_value='true'),
         webots,
+        # The clock producer must use wall time for its stepping timer.
+        webots._supervisor,
+        SetParameter(name='use_sim_time', value=True),
         drone_driver,
-        footprint,
         robot_state_publisher,
         fix_camera_info,
         bgra_to_bgr_node,
         # odom_to_ardupilot_node,
         # gps_pose_publisher_node,
-        stereo_proc,
+        GroupAction(actions=[stereo_proc]),
         # joint_state_publisher,
         imu_merger_node,
         imu_filter_node,

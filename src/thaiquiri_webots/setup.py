@@ -59,7 +59,6 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'drone_driver = thaiquiri_webots.drone_driver:main',
             'bgra_to_bgr = thaiquiri_webots.bgra_to_bgr:main',
             'fix_camera_info = thaiquiri_webots.fix_camera_info:main',
             'odom_to_ardupilot = thaiquiri_webots.odom_to_ardupilot:main',

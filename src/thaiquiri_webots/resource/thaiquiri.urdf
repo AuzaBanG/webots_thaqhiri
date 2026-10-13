@@ -7,6 +7,7 @@
             <updateRate>10</updateRate>
             <alwaysOn>True</alwaysOn>
             <topicName>/drone/livox/gyro</topicName>
+            <frameName>gyro_livox</frameName>
             <gyroName>gyro_livox</gyroName>
         </plugin>
         <plugin type="webots_ros2_driver::Ros2IMU">
@@ -14,20 +15,23 @@
             <updateRate>10</updateRate>
             <alwaysOn>True</alwaysOn>
             <topicName>/drone/livox/acc</topicName>
+            <frameName>accelerometer_livox</frameName>
             <accelerometerName>accelerometer_livox</accelerometerName>
         </plugin>
         <plugin type="webots_ros2_driver::Ros2IMU">
             <enabled>True</enabled>
-            <updateRate>10</updateRate>
+            <updateRate>125</updateRate>
             <alwaysOn>True</alwaysOn>
             <topicName>/drone/cube/gyro</topicName>
+            <frameName>gyro_cube</frameName>
             <gyroName>gyro_cube</gyroName>
         </plugin>
         <plugin type="webots_ros2_driver::Ros2IMU">
             <enabled>True</enabled>
-            <updateRate>10</updateRate>
+            <updateRate>125</updateRate>
             <alwaysOn>True</alwaysOn>
             <topicName>/drone/cube/acc</topicName>
+            <frameName>accelerometer_cube</frameName>
             <accelerometerName>accelerometer_cube</accelerometerName>
         </plugin>
           <device reference="altimeter_cube" type="Altimeter">
@@ -328,15 +332,14 @@
   <joint name="ZED_X_Mini_camera_camera_right_joint" type="fixed">
     <parent link="ZED_X_Mini_camera"/>
     <child link="camera_right"/>
-    <!-- <origin xyz="0.025 0.003 0.003" rpy="-0.523793 -1.570792 -1.047006"/> -->
-    <origin xyz="0.025 0.003 0.003" rpy="0 0 0"/>
+    <!-- Optical frame: x right, y down, z forward (not Webots Camera FLU axes). -->
+    <origin xyz="0.025 0.003 0" rpy="0 0 0"/>
   </joint>
   <link name="camera_left">
   </link>
   <joint name="ZED_X_Mini_camera_camera_left_joint" type="fixed">
     <parent link="ZED_X_Mini_camera"/>
     <child link="camera_left"/>
-    <!-- <origin xyz="-0.025 0.003 0" rpy="-0.523793 -1.570792 -1.047006"/> -->
     <origin xyz="-0.025 0.003 0" rpy="0 0 0"/>
   </joint>
   <link name="cube_orange">
@@ -385,6 +388,13 @@
     <parent link="cube_orange"/>
     <child link="gyro_cube"/>
     <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+  <!-- Cube data rotated from native (left, up, forward) to ROS FLU. -->
+  <link name="imu_link"/>
+  <joint name="cube_orange_imu_joint" type="fixed">
+    <parent link="cube_orange"/>
+    <child link="imu_link"/>
+    <origin xyz="0 0 0" rpy="-1.5707963267948966 -1.5707963267948966 0"/>
   </joint>
   <link name="battery">
   </link>

@@ -6,3 +6,5 @@ my_package/
 *.pdf
 *.gv
 .vscode/
+.venv/
+__pycache__/

@@ -1,12 +1,18 @@
+import math
+
 import rclpy
 from rclpy.node import Node
+from rclpy.executors import ExternalShutdownException
 import message_filters
+from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import Imu
 
 
 class ImuMergerNode(Node):
     def __init__(self):
         super().__init__('imu_merger_node')
+        self._settled_since = None
+        self._initialized = False
 
         # Ajusta estos nombres según los tópicos reales que expone tu robot en Webots
         accel_topic = '/drone/cube/acc'
@@ -14,8 +20,10 @@ class ImuMergerNode(Node):
         imu_out_topic = '/imu/data_raw'
 
         # Suscriptores usando message_filters para la sincronización
-        self.accel_sub = message_filters.Subscriber(self, Imu, accel_topic)
-        self.gyro_sub = message_filters.Subscriber(self, Imu, gyro_topic)
+        self.accel_sub = message_filters.Subscriber(
+            self, Imu, accel_topic, qos_profile=qos_profile_sensor_data)
+        self.gyro_sub = message_filters.Subscriber(
+            self, Imu, gyro_topic, qos_profile=qos_profile_sensor_data)
 
         # ApproximateTimeSynchronizer empareja mensajes que llegan casi al mismo tiempo.
         # queue_size = 10, slop = 0.05 segundos (50ms de tolerancia)
@@ -29,23 +37,47 @@ class ImuMergerNode(Node):
         self.get_logger().info('IMU Merger Node iniciado. Esperando datos sincronizados...')
 
     def sync_callback(self, accel_msg: Imu, gyro_msg: Imu):
+        # Initialize Madgwick only after the spawn drop/contact impulse settles.
+        # Once initialized, forward all dynamics (including free fall).
+        if not self._initialized:
+            a = accel_msg.linear_acceleration
+            w = gyro_msg.angular_velocity
+            stamp = accel_msg.header.stamp.sec + accel_msg.header.stamp.nanosec * 1e-9
+            if (abs(math.sqrt(a.x*a.x + a.y*a.y + a.z*a.z) - 9.81) > 0.5
+                    or math.sqrt(w.x*w.x + w.y*w.y + w.z*w.z) > 0.1):
+                self._settled_since = None
+                return
+            if self._settled_since is None:
+                self._settled_since = stamp
+            if stamp - self._settled_since < 0.2:
+                return
+            self._initialized = True
         # Crear el mensaje Imu consolidado
         merged_imu = Imu()
 
         # 1. Asignar el Header (usamos el del acelerómetro como base)
-        merged_imu.header = accel_msg.header
+        merged_imu.header.stamp = accel_msg.header.stamp
+        merged_imu.header.frame_id = 'imu_link'
 
         # 2. Extraer Aceleración Lineal del tópico del acelerómetro
         # Webots publica la aceleración en el campo linear_acceleration
-        merged_imu.linear_acceleration.x = accel_msg.linear_acceleration.x
-        merged_imu.linear_acceleration.y = accel_msg.linear_acceleration.y
-        merged_imu.linear_acceleration.z = accel_msg.linear_acceleration.z
+        # PROTO axes: x=left, y=up, z=forward. ROS body: x=forward, y=left, z=up.
+        merged_imu.linear_acceleration.x = accel_msg.linear_acceleration.z
+        merged_imu.linear_acceleration.y = accel_msg.linear_acceleration.x
+        merged_imu.linear_acceleration.z = accel_msg.linear_acceleration.y
 
         # 3. Extraer Velocidad Angular del tópico del giroscopio
         # Webots publica la velocidad angular en el campo angular_velocity
-        merged_imu.angular_velocity.x = gyro_msg.angular_velocity.x
-        merged_imu.angular_velocity.y = gyro_msg.angular_velocity.y
-        merged_imu.angular_velocity.z = gyro_msg.angular_velocity.z
+        merged_imu.angular_velocity.x = gyro_msg.angular_velocity.z
+        merged_imu.angular_velocity.y = gyro_msg.angular_velocity.x
+        merged_imu.angular_velocity.z = gyro_msg.angular_velocity.y
+        order = (2, 0, 1)
+        merged_imu.linear_acceleration_covariance = [
+            accel_msg.linear_acceleration_covariance[3 * i + j]
+            for i in order for j in order]
+        merged_imu.angular_velocity_covariance = [
+            gyro_msg.angular_velocity_covariance[3 * i + j]
+            for i in order for j in order]
 
         # 4. Matrices de covarianza (Opcional, pero recomendado)
         # Si tienes ruidos conocidos de tus sensores simulados, puedes añadirlos aquí.
@@ -62,11 +94,11 @@ def main(args=None):
     node = ImuMergerNode()
     try:
         rclpy.spin(node)
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, ExternalShutdownException):
         pass
     finally:
         node.destroy_node()
-        rclpy.shutdown()
+        rclpy.try_shutdown()
 
 
 if __name__ == '__main__':
