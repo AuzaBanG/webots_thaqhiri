@@ -1,19 +1,33 @@
+"""Launch the Thaiquiri simulation with a shared simulation clock."""
+
 import os
+
+from ament_index_python.packages import get_package_share_directory
+
 import launch
 from launch import LaunchDescription
+from launch.actions import DeclareLaunchArgument, GroupAction, IncludeLaunchDescription
+from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
-from launch.conditions import IfCondition
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, GroupAction
+
 from launch_ros.actions import Node, SetParameter
 from launch_ros.substitutions import FindPackageShare
-from ament_index_python.packages import get_package_share_directory
-from webots_ros2_driver.webots_launcher import WebotsLauncher
-from webots_ros2_driver.webots_controller import WebotsController
+
 from webots_ros2_driver.wait_for_controller_connection import WaitForControllerConnection
+from webots_ros2_driver.webots_controller import WebotsController
+from webots_ros2_driver.webots_launcher import WebotsLauncher
+
+
+def _shutdown_if_running(event, context):
+    # Ctrl-C already initiated shutdown; do not shut the ROS adapter down twice.
+    if context.is_shutdown:
+        return []
+    return [launch.actions.EmitEvent(event=launch.events.Shutdown())]
 
 
 def generate_launch_description():
+    """Create controller, sensor-processing, and optional mapping actions."""
     use_rtabmap = LaunchConfiguration('rtabmap', default=True)
 
     package_dir = get_package_share_directory('thaiquiri_webots')
@@ -40,14 +54,22 @@ def generate_launch_description():
 
     rtabmap = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
-            PathJoinSubstitution([FindPackageShare('rtabmap_launch'), 'launch', 'rtabmap.launch.py'])
+            PathJoinSubstitution([
+                FindPackageShare('rtabmap_launch'), 'launch', 'rtabmap.launch.py'])
         ),
         launch_arguments={
             'use_sim_time': 'true',
             'namespace': 'drone',
-            'rtabmap_args': '--delete_db_on_start',
+            'rtabmap_args': '--delete_db_on_start --Reg/Strategy 1 --Grid/3D true',
+            'database_path': LaunchConfiguration('database_path'),
+            'rtabmap_viz': LaunchConfiguration('rtabmap_viz'),
 
             'stereo': 'true',
+            # The direct stereo callback does not carry scan clouds. Packaging
+            # stereo as RGBDImage enables RTAB-Map's RGBD + scan synchronizer.
+            'rgbd_sync': 'true',
+            'subscribe_rgbd': 'true',
+            'approx_rgbd_sync': 'false',
             'left_image_topic': '/drone/left/image_rect_color',
             'right_image_topic': '/drone/right/image_rect',
             'left_camera_info_topic': '/drone/left/camera_info',
@@ -70,13 +92,13 @@ def generate_launch_description():
             'approx_sync_max_interval': '0.05',
             'rviz': 'False',
 
-            "queue_size": "20",
+            'queue_size': '20',
         }.items(),
     )
 
     webots = WebotsLauncher(
-        world=os.path.join(package_dir, 'webots_world',
-                            'worlds', 'mine_thaiquiri.wbt'),
+        world=PathJoinSubstitution([
+            package_dir, 'webots_world', 'worlds', LaunchConfiguration('world')]),
         ros2_supervisor=True,
         gui=LaunchConfiguration('gui'),
     )
@@ -103,38 +125,6 @@ def generate_launch_description():
         name='bgra_to_bgr_node',
         output='screen',
         namespace='drone',
-    )
-
-    odom_to_ardupilot_node = Node(
-        package='thaiquiri_webots',
-        executable='odom_to_ardupilot',
-        name='odom_to_ardupilot_node',
-        output='screen',
-        namespace='drone',
-        parameters=[
-            {'odom_topic': '/drone/odom'},
-            {'tf_topic': '/ap/tf'},
-            {'parent_frame': 'odom'},
-            {'child_frame': 'base_footprint'},
-            {'use_sim_time': True},
-        ],
-        remappings=[
-            ('/clock', '/ap/clock')
-        ],
-    )
-
-    gps_pose_publisher_node = Node(
-        package='thaiquiri_webots',
-        executable='gps_pose_publisher',
-        name='gps_pose_publisher_node',
-        output='screen',
-        namespace='drone',
-        parameters=[
-            {'use_sim_time': True},
-        ],
-        remappings=[
-            ('/clock', '/ap/clock')
-        ],
     )
 
     imu_merger_node = Node(
@@ -181,6 +171,10 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument('rtabmap', default_value='true'),
         DeclareLaunchArgument('gui', default_value='true'),
+        DeclareLaunchArgument('world', default_value='mine_thaiquiri.wbt',
+                              description='World filename, e.g. cerro_rico.wbt'),
+        DeclareLaunchArgument('database_path', default_value='~/.ros/rtabmap.db'),
+        DeclareLaunchArgument('rtabmap_viz', default_value='true'),
         webots,
         # The clock producer must use wall time for its stepping timer.
         webots._supervisor,
@@ -189,8 +183,6 @@ def generate_launch_description():
         robot_state_publisher,
         fix_camera_info,
         bgra_to_bgr_node,
-        # odom_to_ardupilot_node,
-        # gps_pose_publisher_node,
         GroupAction(actions=[stereo_proc]),
         # joint_state_publisher,
         imu_merger_node,
@@ -199,8 +191,7 @@ def generate_launch_description():
         launch.actions.RegisterEventHandler(
             event_handler=launch.event_handlers.OnProcessExit(
                 target_action=webots,
-                on_exit=[launch.actions.EmitEvent(
-                    event=launch.events.Shutdown())],
+                on_exit=_shutdown_if_running,
             )
         )
     ])

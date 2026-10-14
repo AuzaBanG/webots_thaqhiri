@@ -29,17 +29,11 @@ data_files = [
     ('share/ament_index/resource_index/packages',
      ['resource/' + package_name]),
     ('share/' + package_name + '/launch', ['launch/drone_launch.py']),
-    ('share/' + package_name + '/webots_world/worlds',
-     ['webots_world/worlds/mine_thaiquiri.wbt']),
-    ('share/' + package_name + '/webots_world/protos',
-     ['webots_world/protos/thaiquiri.proto']),
     ('share/' + package_name + '/resource', ['resource/thaiquiri.urdf']),
     ('share/' + package_name, ['package.xml']),
 ]
 
-meshes_target = os.path.join(
-    'share', package_name, 'webots_world/protos/meshes')
-data_files.extend(package_files('webots_world/protos/meshes', meshes_target))
+data_files.extend(package_files('webots_world', 'share/' + package_name + '/webots_world'))
 
 setup(
     name=package_name,
@@ -65,6 +59,7 @@ setup(
             'gps_pose_publisher = thaiquiri_webots.gps_pose_publisher:main',
             'imu_merger_node = thaiquiri_webots.imu_merger_node:main',
             'teleop_drone = thaiquiri_webots.teleop_drone:main',
+            'sil_observer = thaiquiri_webots.sil_observer:main',
         ],
     },
 )

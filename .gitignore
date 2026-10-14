@@ -8,3 +8,4 @@ my_package/
 .vscode/
 .venv/
 __pycache__/
+experiment_data/

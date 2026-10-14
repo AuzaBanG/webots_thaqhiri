@@ -4,6 +4,15 @@ This repository is a ROS 2 Jazzy workspace for simulating the **Thaiquiri quadro
 
 The directory uses the spelling `thaqhiri`, but the ROS package, Python modules, and robot assets use **`thaiquiri`**. Use `thaiquiri_webots` in ROS commands. The Docker service retains the older name **`padoru_webots_jazzy`**.
 
+**Cerro Rico mine:** the supplied `02_Cerro_Rico_Messy.blend` is integrated as
+`cerro_rico.wbt`. See [mine import and SIL validation](docs/cerro_rico_sil.md) for
+asset provenance, the automated flight/mapping trial, acceptance criteria, and
+interpretation limits. Launch it with
+`ros2 launch thaiquiri_webots drone_launch.py world:=cerro_rico.wbt`.
+The [measured SIL report](validation/cerro_rico/report.md) records working
+stabilization/mapping and remaining failures in drift, return tracking, and
+camera contrast; the complete traversal criteria are not yet met.
+
 ## 1. The bigger picture
 
 There are two packages:
@@ -33,7 +42,11 @@ The controller consumes `/imu/data` in the ROS forward-left-up `imu_link` frame 
 
 The larger intended workflow is to develop sensing and mapping in simulation, then connect estimated motion to ArduPilot. The repository contains pieces of that integration, but the default launch uses neither ArduPilot SITL nor the odometry/GPS bridge nodes.
 
-There is one supplied world and no automated mission runner, benchmark suite, or saved experiment dataset. The procedures below are manual experiments supported by the available components. The gas-sensor payload is represented visually; no gas dispersion, concentration measurements, or gas ROS topics are implemented.
+Two worlds are supplied: the original arena and the imported Cerro Rico mine.
+`scripts/run_sil.py` automates a bounded entrance-corridor flight/mapping trial;
+the procedures below also support manual experiments. The gas-sensor payload is
+represented visually; no gas dispersion, concentration measurements, or gas ROS
+topics are implemented.
 
 ## 2. Setup and build
 
@@ -288,7 +301,7 @@ Start teleop in a second terminal and move through the environment while checkin
 rviz2
 ```
 
-In RViz, choose `map` as Fixed Frame once available, and add TF, PointCloud2, Image, and map displays using the topics that actually appear in `ros2 topic list -t`. The tested native launch published `/drone/odom` and `/drone/mapData`; confirm these with your installed launch version because the stereo include's namespace configuration also affects the RTAB-Map include.
+In RViz, choose `map` as Fixed Frame once available, and add TF, PointCloud2, Image, and map displays using the topics that actually appear in `ros2 topic list -t`. RTAB-Map explicitly uses namespace `/drone`, publishing `/drone/odom` and `/drone/mapData`. Stereo and mapping includes have separate scopes so their launch arguments do not leak into one another.
 
 This is a mapping integration experiment. Short hover and altitude-step checks pass, but stereo correspondence quality and long-flight behavior still require evaluation before quantitative map or trajectory comparisons.
 
@@ -345,11 +358,11 @@ All paths in this table are relative to `src/thaiquiri_webots/`.
 | File | Purpose and execution |
 | --- | --- |
 | `package.xml` | ROS package identity, Apache-2.0 declaration, runtime dependencies, and test dependencies. Read by ROS/colcon/rosdep. |
-| `setup.py` | Installs the Python package, launch file, URDF, world, PROTO, all meshes/materials, and six console-script entries. Does not install `disparity_node.yaml` or the hidden world preview/editor files. |
+| `setup.py` | Installs the Python package, launch file, URDF, both worlds, PROTOs, meshes/materials/textures, and seven console-script entries including `sil_observer`. Does not install `disparity_node.yaml`. |
 | `setup.cfg` | Places Python executables in `lib/thaiquiri_webots` so `ros2 run` can discover them. |
 | `resource/thaiquiri_webots` | Empty ament resource-index marker used for package discovery. |
 | `resource/thaiquiri.urdf` | ROS link/joint tree, simplified visual/collision geometry, Webots plugin selection, four IMU plugins, and altimeter configuration. Selects `thaiquiri_webots.drone_driver.DroneDriver`; read by the launch and Webots controller. |
-| `launch/drone_launch.py` | The main entry point: `ros2 launch thaiquiri_webots drone_launch.py`. Starts the default pipeline and shuts it down when Webots exits. Defines odometry/GPS bridge nodes but leaves them commented out of the returned launch description. |
+| `launch/drone_launch.py` | The main entry point: `ros2 launch thaiquiri_webots drone_launch.py`. Starts the clock, simulation, processing, and optional mapping pipeline; shuts it down when Webots exits. ArduPilot helpers are separate executables, not part of this launch. |
 | `disparity_node.yaml` | Saved stereo/disparity tuning values, including a 61-pixel correlation window, disparity range 384, and minimum disparity -350. Currently not loaded by the launch; it is a flat parameter list, not a ready-to-use node-scoped ROS parameter file. |
 | `.gitignore` | Ignores a local `/drone_project` directory. |
 | `LICENSE` | Apache License 2.0 text for this package. |
@@ -364,6 +377,8 @@ All paths in this table are relative to `src/thaiquiri_webots/`.
 | `bgra_to_bgr.py` | Removes the alpha channel from both Webots camera images using OpenCV/cv_bridge, preserving headers. Outputs `/drone/left/image_raw` and `/drone/right/image_raw`. Launched automatically; executable `bgra_to_bgr`. |
 | `fix_camera_info.py` | Republishes left camera calibration and sets right projection matrix `P[3] = -fx * 0.05`, assuming a 5 cm stereo baseline. Launched automatically; executable `fix_camera_info`. |
 | `imu_merger_node.py` | Synchronizes Cube acceleration/gyro (queue 10, tolerance 0.05 s), rotates vectors and covariance from native `(left, up, forward)` to ROS `(forward, left, up)`, and sets `imu_link`. Waits for 0.2 s of settled readings at startup; marks orientation unavailable for Madgwick. |
+| `sil_observer.py` | Independent, spawned Webots supervisor publishing true body pose and contact counts for SIL scoring. Does not feed flight control, SLAM, or TF. |
+| `sil_metrics.py` | First-pose trajectory alignment, scalar error summaries, and sampled-surface map error calculations used by the SIL runner. |
 | `drone_driver_3.py` | **Inactive alternate plugin** wrapping `WebotsArduVehicle` plus altitude telemetry. Uses a hard-coded SITL address `172.18.0.3`, no GPS/InertialUnit device, and no reversed motors. Has no standalone executable. |
 | `webots_vehicle.py` | Imported ArduPilot/Webots transport implementation. Exchanges binary UDP motor/sensor packets, applies motor scaling, and optionally streams camera/rangefinder data over TCP. Its background thread calls `robot.step()`. No command-line entry point. |
 | `odom_to_ardupilot.py` | Optional `Odometry` to `/ap/tf` adapter. Validates input frame names, adjusts orientation using the URDF rotation and a 180-degree X rotation, copies position, and publishes hard-coded `odom -> base_link` frames using the node's current time. Executable `odom_to_ardupilot`; disabled in the main launch. |
@@ -379,6 +394,8 @@ Avoid starting duplicate copies of sensor adapters while the main launch is runn
 | `worlds/.mine_thaiquiri.wbproj` | Saved Webots editor layout, perspectives, and device-view settings; not simulation logic. |
 | `worlds/.mine_thaiquiri.jpg` | Preview image of the quadrotor in the mine world. |
 | `protos/thaiquiri.proto` | Full Webots robot: physical bodies/masses, collision shapes, meshes, four thrust-generating propellers, Cube sensors, stereo cameras, and Livox-labelled LiDAR/IMU devices. |
+| `worlds/cerro_rico.wbt` | Imported full mine with a repeatable level launch fixture at the source spawn marker. |
+| `protos/CerroRico.proto`, `protos/cerro_rico/` | Generated mine visual/collision meshes, packed textures, practical lights, geometry provenance, and a deterministic surface reference for SIL map scoring. |
 
 The Webots PROTO defines physics; the URDF defines ROS frames and plugin configuration. Keep both consistent when changing geometry or sensor placement.
 
@@ -493,7 +510,7 @@ ros2 run thaiquiri_webots odom_to_ardupilot --ros-args \
 
 It publishes `/ap/tf`, but that alone does not make ArduPilot consume it. The node applies orientation corrections and hard-codes output frames despite the introductory docstring saying it only copies the pose. Validate those transformations against the external navigation convention you use.
 
-If enabling the bridge nodes in `drone_launch.py`, note that they use simulated time with `/clock` remapped to `/ap/clock`; a functioning publisher on `/ap/clock` is then required.
+When adding the optional bridge nodes to a launch, select the appropriate clock explicitly: `/clock` for Webots or a verified `/ap/clock` publisher for an ArduPilot-driven simulation.
 
 ## 6. Current limitations and required corrections
 
@@ -528,12 +545,23 @@ On the host, use `docker compose ps` and `docker compose logs padoru_webots_jazz
 
 ### Validation scope
 
+**Implementation debugging — 2026-10-13:**
+
+- Ten focused regression tests pass (control math/mixing, startup gating, one-shot altitude commands, IMU conversion/initialization, and sensor geometry). Focused flake8 checks pass for the driver, IMU merger, launch file, and regression tests.
+- Native sensor-only takeoff/hover and a 60-second mapping run were exercised. A +0.1 m altitude command changed the target from 0.5 to 0.6 m; after settling, measured sensor altitude ranged from **0.5997 to 0.6022 m**. This is a short altitude/attitude test, not a horizontal-position-hold or long-flight validation.
+- The mapping run received **469 odometry messages, 48 map updates, 4,050 filtered IMU messages, 5,912 rectified left images, and 492 LiDAR clouds**. Empty-IMU-frame and excessive stereo-correspondence warnings were absent after fixing the IMU frames and stereo baseline geometry.
+- Runtime parameter queries confirmed simulation time on robot-state publishing, image/IMU processing, stereo disparity, ICP odometry, and RTAB-Map. Only the Webots clock supervisor uses wall time, to avoid waiting on the clock it produces.
+- Python adapter shutdown now handles interrupted/already-shut-down ROS contexts, and Webots exit no longer requests a second launch shutdown. The installed upstream Webots supervisor can still exit with signal code -2 on Ctrl-C; an upstream component-container teardown failure was also seen in earlier mapping runs. These shutdown reports are distinct from the validated runtime data flow.
+- Map accuracy, all keyboard maneuvers, and SITL remain unvalidated. Logs from the latest run are in `/tmp/opencode/final-validation.log` and `/tmp/opencode/trial-launch.log` on the test host (temporary files).
+
+**Initial installation smoke test (before the implementation fixes):**
+
 Native execution was smoke-tested on **2026-10-12** with Ubuntu 24.04, system Python 3.12.3, uv 0.8.3, ROS 2 Jazzy (updated installed packages), Webots R2025a, and the pinned Python requirements:
 
 - Both packages built successfully using the uv environment; Python ROS/OpenCV imports and generated ArduPilot interfaces loaded successfully. `uv pip check` passed.
 - `ros2 launch thaiquiri_webots drone_launch.py rtabmap:=false` connected the controller and delivered altitude, motor telemetry, filtered IMU, raw/rectified camera images, and LiDAR messages during a 20-second subscription check.
 - The default `ros2 launch thaiquiri_webots drone_launch.py` also ran. A 30-second check received **190 `/drone/odom` messages, 27 `/drone/mapData` updates, 227 filtered IMU messages, 2,710 rectified left images, and 189 LiDAR clouds**. These are observed message counts, not guaranteed performance rates.
-- RTAB-Map still emitted empty-source-frame transform warnings. The control, frame/time, and calibration limitations in section 6 remain; this validates startup and data flow, **not flight stability or map accuracy**. Keyboard flight and SITL were not validated.
+- That initial run emitted empty-source-frame transform warnings and validated startup/data flow only. The later debugging checks above supersede its implementation findings. Keyboard flight and SITL were not validated.
 
 During native dependency installation, apt also reported an NVIDIA DKMS failure for the host's pending `7.0.0-38-generic` kernel. The required ROS packages nevertheless installed, and the currently running `6.17.0-20-generic` kernel/NVIDIA driver supported these tests. That separate host package-configuration issue was not repaired by this setup.
 

@@ -2,12 +2,16 @@
 
 import math
 
+from geometry_msgs.msg import Twist
+
 import rclpy
+from rclpy.executors import ExternalShutdownException
 from rclpy.parameter import Parameter
 from rclpy.qos import qos_profile_sensor_data
-from geometry_msgs.msg import Twist
-from webots_ros2_msgs.msg import FloatStamped
+
 from sensor_msgs.msg import Imu, JointState
+
+from webots_ros2_msgs.msg import FloatStamped
 
 
 def quaternion_to_roll_pitch(q):
@@ -122,8 +126,13 @@ class DroneDriver:
         using proportional control and the quadrotor motor-mixing equations.
         """
         # Service clock, attitude, and command callbacks without accumulating lag.
-        for _ in range(4):
-            rclpy.spin_once(self.__node, timeout_sec=0)
+        try:
+            for _ in range(4):
+                if not rclpy.ok():
+                    return
+                rclpy.spin_once(self.__node, timeout_sec=0)
+        except ExternalShutdownException:
+            return
 
         attitude = (quaternion_to_roll_pitch(self.__imu_data.orientation)
                     if self.__imu_data is not None else None)

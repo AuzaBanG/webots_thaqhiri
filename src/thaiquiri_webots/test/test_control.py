@@ -1,14 +1,21 @@
 """Regression checks for attitude conventions, motor mixing, and IMU startup."""
 
 import math
+import re
+import xml.etree.ElementTree as ET
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from builtin_interfaces.msg import Time
+
 from geometry_msgs.msg import Quaternion, Twist
+
 import pytest
-from sensor_msgs.msg import Imu
+
 from scipy.spatial.transform import Rotation
+
+from sensor_msgs.msg import Imu
 
 from thaiquiri_webots.drone_driver import (
     DroneDriver, mix_motor_speeds, quaternion_to_roll_pitch)
@@ -52,7 +59,8 @@ def test_startup_requires_received_imu_and_altitude_command_is_increment():
     altimeter.getValue.return_value = 0.5
     robot.getDevice.side_effect = [altimeter, *motors]
     with patch('thaiquiri_webots.drone_driver.rclpy') as ros:
-        ros.create_node.return_value.get_clock.return_value.now.return_value.to_msg.return_value = Time()
+        clock = ros.create_node.return_value.get_clock.return_value
+        clock.now.return_value.to_msg.return_value = Time()
         driver = DroneDriver()
         driver.init(SimpleNamespace(robot=robot), {})
         driver.step()
@@ -105,3 +113,26 @@ def test_imu_waits_for_settled_initialization():
         ImuMergerNode.sync_callback(merger, accel, gyro)
     assert merger._initialized
     merger.imu_pub.publish.assert_called_once()
+
+
+def test_sensor_frames_match_model_geometry():
+    """Keep IMU rotation and rectified stereo assumptions aligned with assets."""
+    package = Path(__file__).resolve().parents[1]
+    urdf = ET.parse(package / 'resource/thaiquiri.urdf').getroot()
+    origins = {j.get('name'): j.find('origin') for j in urdf.findall('joint')}
+    body = Rotation.from_euler('xyz', list(map(
+        float, origins['base_footprint_to_base_link'].get('rpy').split())))
+    imu = Rotation.from_euler('xyz', list(map(
+        float, origins['cube_orange_imu_joint'].get('rpy').split())))
+    assert (body * imu).magnitude() < 1e-5
+
+    proto = (package / 'webots_world/protos/thaiquiri.proto').read_text()
+    positions = []
+    for side in ('left', 'right'):
+        values = re.search(r'DEF camera_' + side + r' Camera \{\s+translation ([^\n]+)', proto)
+        actual = list(map(float, values.group(1).split()))
+        expected = list(map(float, origins[
+            f'ZED_X_Mini_camera_camera_{side}_joint'].get('xyz').split()))
+        assert actual == pytest.approx(expected)
+        positions.append(actual)
+    assert [right-left for left, right in zip(*positions)] == pytest.approx([0.05, 0, 0])

@@ -1,15 +1,22 @@
+"""Merge native Cube inertial samples into a ROS forward-left-up IMU."""
+
 import math
 
-import rclpy
-from rclpy.node import Node
-from rclpy.executors import ExternalShutdownException
 import message_filters
+
+import rclpy
+from rclpy.executors import ExternalShutdownException
+from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
+
 from sensor_msgs.msg import Imu
 
 
 class ImuMergerNode(Node):
+    """Synchronize and rotate the co-located Cube accelerometer and gyro."""
+
     def __init__(self):
+        """Create sensor subscriptions and startup-settling state."""
         super().__init__('imu_merger_node')
         self._settled_since = None
         self._initialized = False
@@ -37,6 +44,7 @@ class ImuMergerNode(Node):
         self.get_logger().info('IMU Merger Node iniciado. Esperando datos sincronizados...')
 
     def sync_callback(self, accel_msg: Imu, gyro_msg: Imu):
+        """Publish synchronized body-frame samples after initial settling."""
         # Initialize Madgwick only after the spawn drop/contact impulse settles.
         # Once initialized, forward all dynamics (including free fall).
         if not self._initialized:
@@ -90,6 +98,7 @@ class ImuMergerNode(Node):
 
 
 def main(args=None):
+    """Run the IMU merger until launch shuts down."""
     rclpy.init(args=args)
     node = ImuMergerNode()
     try:
